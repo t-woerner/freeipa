@@ -331,7 +331,8 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     fw_services = ["freeipa-ldap", "freeipa-ldaps"]
 
     args = [
-        'ipa-server-install',
+        # 'ipa-server-install',
+        'ansible-ipa-server-install',
         '-n', host.domain.name,
         '-r', host.domain.realm,
         '-p', host.config.dirman_password,
@@ -357,8 +358,12 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         args.append('--external-ca')
 
     args.extend(extra_args)
-    result = host.run_command(args, raiseonerr=raiseonerr,
-                              stdin_text=stdin_text)
+    # result = host.run_command(args, raiseonerr=raiseonerr,
+    #                           stdin_text=stdin_text)
+    args.append("--ansible-verbose=2")
+    args.append(host.external_hostname)
+    result = ipautil.run(args, raiseonerr=raiseonerr,
+                         stdin=stdin_text)
     if result.returncode == 0:
         fw.enable_services(fw_services)
     if result.returncode == 0 and not external_ca:
@@ -441,7 +446,9 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     fw_services = ["freeipa-ldap", "freeipa-ldaps"]
     # Otherwise ipa-client-install would not create a PTR
     # and replica installation would fail
-    args = ['ipa-replica-install',
+    # args = ['ipa-replica-install',
+    #         '--admin-password', replica.config.admin_password]
+    args = ['ansible-ipa-replica-install',
             '--admin-password', replica.config.admin_password]
 
     if promote:  # while promoting we use directory manager password
@@ -487,8 +494,12 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
                  '--domain', replica.domain.name])
     fw.enable_services(fw_services)
 
-    result = replica.run_command(args, raiseonerr=raiseonerr,
-                                 stdin_text=stdin_text)
+    # result = replica.run_command(args, raiseonerr=raiseonerr,
+    #                              stdin_text=stdin_text)
+    args.append("--ansible-verbose=2")
+    args.append(replica.external_hostname)
+    result = ipautil.run(args, raiseonerr=raiseonerr,
+                         stdin=stdin_text)
     if result.returncode == 0:
         enable_replication_debugging(replica)
         setup_sssd_debugging(replica)
@@ -517,7 +528,8 @@ def install_client(master, client, extra_args=[], user=None,
         password = client.config.admin_password
 
     args = [
-        'ipa-client-install',
+        # 'ipa-client-install',
+        'ansible-ipa-client-install',
         '--domain', client.domain.name,
         '--realm', client.domain.realm,
         '-p', user,
@@ -530,7 +542,10 @@ def install_client(master, client, extra_args=[], user=None,
 
     args.extend(extra_args)
 
-    result = client.run_command(args, stdin_text=stdin_text)
+    # result = client.run_command(args, stdin_text=stdin_text)
+    args.append("--ansible-verbose=2")
+    args.append(client.external_hostname)
+    result = ipautil.run(args, stdin=stdin_text)
 
     setup_sssd_debugging(client)
     kinit_admin(client)
@@ -894,7 +909,8 @@ def kinit_admin(host, raiseonerr=True):
 def uninstall_master(host, ignore_topology_disconnect=True,
                      ignore_last_of_role=True, clean=True, verbose=False):
     host.collect_log(paths.IPASERVER_UNINSTALL_LOG)
-    uninstall_cmd = ['ipa-server-install', '--uninstall', '-U']
+    # uninstall_cmd = ['ipa-server-install', '--uninstall', '-U']
+    uninstall_cmd = ['ansible-ipa-server-install', '--uninstall', '-U']
 
     host_domain_level = domainlevel(host)
 
@@ -907,8 +923,12 @@ def uninstall_master(host, ignore_topology_disconnect=True,
     if verbose and host_domain_level != DOMAIN_LEVEL_0:
         uninstall_cmd.append('-v')
 
-    result = host.run_command(uninstall_cmd)
-    assert "Traceback" not in result.stdout_text
+    # result = host.run_command(uninstall_cmd)
+    # assert "Traceback" not in result.stdout_text
+    uninstall_cmd.append("--ansible-verbose=2")
+    uninstall_cmd.append(host.external_hostname)
+    result = ipautil.run(uninstall_cmd)
+    assert "Traceback" not in result.output
     if clean:
         Firewall(host).disable_services(["freeipa-ldap", "freeipa-ldaps",
                                          "freeipa-trust", "dns"])
@@ -935,8 +955,10 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 def uninstall_client(host):
     host.collect_log(paths.IPACLIENT_UNINSTALL_LOG)
 
-    host.run_command(['ipa-client-install', '--uninstall', '-U'],
-                     raiseonerr=False)
+    # host.run_command(['ipa-client-install', '--uninstall', '-U'],
+    #                  raiseonerr=False)
+    ipautil.run(['ansible-ipa-client-install', '--uninstall', '-U'],
+                raiseonerr=False)
     unapply_fixes(host)
 
 
