@@ -22,12 +22,29 @@
 LDAP shared certificate store.
 """
 
+from typing import NamedTuple
+
 from pyasn1.error import PyAsn1Error
 
 from ipapython.dn import DN
 from ipapython.certdb import get_ca_nickname, TrustFlags
 from ipalib import errors, x509
 from ipalib.constants import IPA_CA_CN
+
+
+class CACertInfo(NamedTuple):
+    """CA certificate with trust metadata.
+
+    Returned by get_ca_certs() and make_compat_ca_certs().
+    Using NamedTuple instead of raw tuples prevents silent breakage
+    when fields are added or removed — callers can use named access
+    (info.cert, info.trusted) instead of positional unpacking.
+    """
+    cert: object  # x509.IPACertificate
+    nickname: str
+    trusted: bool
+    ext_key_usage: frozenset
+    serial_number: str = ""
 
 
 def _parse_cert(cert):
@@ -292,7 +309,12 @@ def make_compat_ca_certs(certs, realm, ipa_ca_subject):
             nickname = str(subject)
             ext_key_usage = {x509.EKU_SERVER_AUTH}
 
-        result.append((cert, nickname, True, ext_key_usage))
+        result.append(CACertInfo(
+            cert=cert,
+            nickname=nickname,
+            trusted=True,
+            ext_key_usage=frozenset(ext_key_usage),
+        ))
 
     return result
 
@@ -345,9 +367,13 @@ def get_ca_certs(ldap, base_dn, compat_realm, compat_ipa_ca,
                     certs = []
                     break
                 serial_number = issuer_serial.split(';')[1]
-                certs.append(
-                    (cert, nickname, trusted, ext_key_usage, serial_number)
-                )
+                certs.append(CACertInfo(
+                    cert=cert,
+                    nickname=nickname,
+                    trusted=trusted,
+                    ext_key_usage=frozenset(ext_key_usage),
+                    serial_number=serial_number,
+                ))
     except errors.NotFound:
         try:
             ldap.get_entry(container_dn, [''])
