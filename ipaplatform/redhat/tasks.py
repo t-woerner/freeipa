@@ -307,18 +307,19 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 raise
 
             has_eku = set()
-            for cert, nickname, trusted, _ext_key_usage, _serial in ca_certs:
+            for info in ca_certs:
                 try:
-                    subject = cert.subject_bytes
-                    issuer = cert.issuer_bytes
-                    serial_number = cert.serial_number_bytes
-                    public_key_info = cert.public_key_info_bytes
+                    subject = info.cert.subject_bytes
+                    issuer = info.cert.issuer_bytes
+                    serial_number = info.cert.serial_number_bytes
+                    public_key_info = info.cert.public_key_info_bytes
                 except (PyAsn1Error, ValueError, CertificateError):
                     logger.error(
-                        "Failed to decode certificate \"%s\"", nickname)
+                        "Failed to decode certificate \"%s\"",
+                        info.nickname)
                     raise
 
-                label = urllib.parse.quote(nickname)
+                label = urllib.parse.quote(info.nickname)
                 subject = urllib.parse.quote(subject)
                 issuer = urllib.parse.quote(issuer)
                 serial_number = urllib.parse.quote(serial_number)
@@ -338,12 +339,13 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                             issuer=issuer,
                             serial_number=serial_number,
                             public_key_info=public_key_info))
-                if trusted is True:
+                if info.trusted is True:
                     obj += "trusted: true\n"
-                elif trusted is False:
+                elif info.trusted is False:
                     obj += "x-distrusted: true\n"
                 obj += "{pem}\n\n".format(
-                    pem=cert.public_bytes(x509.Encoding.PEM).decode('ascii'))
+                    pem=info.cert.public_bytes(
+                        x509.Encoding.PEM).decode('ascii'))
 
                 f.write(obj)
 
